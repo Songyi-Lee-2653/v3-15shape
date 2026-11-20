@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>선대칭·점대칭 AI 도형 탐구 도우미 (학생용)</title>
+  <!-- [필수 규정] 티처블머신 호환을 위해 tfjs 1.3.1 및 tmImage 0.8 버전 고정 유지 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #f4f7fb;
+      --card-bg: #ffffff;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --text-main: #1e293b;
+      --text-sub: #64748b;
+      --line-color: #3b82f6;
+      --point-color: #10b981;
+      --both-color: #8b5cf6;
+      --none-color: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      padding: 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 20px;
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .top-links {
+      margin-top: 8px;
+    }
+
+    .nav-link {
+      display: inline-block;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-decoration: none;
+    }
+
+    .privacy-badge {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px 16px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #1e293b;
+    }
+
+    .btn-secondary:hover {
+      background: #cbd5e1;
+    }
+
+    .viewer-box {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-width: 360px;
+      margin: 0 auto 16px;
+      background: #f8fafc;
+      border: 3px dashed #cbd5e1;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #previewImage, #webcam-container canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: transform 0.6s ease;
+    }
+
+    /* 반으로 접어 겹쳐보기용 반투명 미러 이미지 */
+    #foldMirrorImage {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      opacity: 0.45;
+      transform: scaleX(-1);
+      pointer-events: none;
+      display: none;
+      filter: hue-rotate(140deg);
+    }
+
+    .placeholder-text {
+      color: var(--text-sub);
+      font-size: 1.05rem;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .axis-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+    }
+
+    .axis-line-v {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      border-left: 3px dashed #ef4444;
+    }
+
+    .axis-line-h {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      border-top: 3px dashed #ef4444;
+    }
+
+    .center-dot {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 12px;
+      height: 12px;
+      background: #ef4444;
+      border: 2px solid white;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .result-banner {
+      padding: 20px;
+      border-radius: 16px;
+      background: #f1f5f9;
+      text-align: center;
+      margin-bottom: 20px;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .result-title {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+      word-break: keep-all;
+    }
+
+    .result-desc {
+      font-size: 1rem;
+      color: var(--text-sub);
+    }
+
+    .prob-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .prob-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .prob-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .prob-bar-bg {
+      width: 100%;
+      height: 24px;
+      background: #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .prob-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 12px;
+      transition: width 0.3s ease;
+    }
+
+    .tool-bar {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .status-msg {
+      text-align: center;
+      font-size: 0.92rem;
+      color: var(--text-sub);
+      margin-top: 10px;
+      font-weight: 600;
+    }
+
+    .caution-box {
+      background: #f8fafc;
+      border-left: 4px solid #64748b;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #334155;
+      line-height: 1.5;
+    }
+
+    .caution-box ul {
+      margin-top: 6px;
+      padding-left: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📐 선대칭·점대칭 AI 도형 탐구 도우미</h1>
+      <div class="privacy-badge">🔒 안전 보호: 촬영·업로드한 사진은 외부 서버로 전송되거나 저장되지 않습니다.</div>
+      <div class="top-links">
+        <a href="./eval.html" class="nav-link">👉 교사용 평가 화면(eval.html)으로 이동</a>
+      </div>
+    </header>
+
+    <div class="main-grid">
+      <!-- 왼쪽 카드: 도형 사진 입력 및 시각적 탐구 도구 -->
+      <div class="card">
+        <div class="btn-group">
+          <label for="fileInput" class="btn btn-primary">📁 도형 사진 올리기</label>
+          <input type="file" id="fileInput" accept="image/*" style="display: none;">
+          <button type="button" id="webcamBtn" class="btn btn-secondary">📷 카메라 켜기</button>
+        </div>
+
+        <div class="viewer-box" id="viewerBox">
+          <div class="placeholder-text" id="placeholderText">
+            내가 그린 도형 사진을 올리거나<br>카메라로 비추어 보세요!
+          </div>
+          <img id="previewImage" alt="도형 미리보기" style="display: none;">
+          <img id="foldMirrorImage" alt="반 접기 겹침 비교">
+          <div id="webcam-container" style="display: none; width: 100%; height: 100%;"></div>
+
+          <!-- 대칭축 및 대칭의 중심 오버레이 -->
+          <div class="axis-overlay" id="axisOverlay">
+            <div class="axis-line-v"></div>
+            <div class="axis-line-h"></div>
+            <div class="center-dot"></div>
+          </div>
+        </div>
+
+        <!-- 인터랙티브 수학 탐구 버튼 3종 -->
+        <div class="tool-bar">
+          <button type="button" id="rotateBtn" class="btn btn-secondary" style="font-size: 0.9rem; padding: 10px;">🔄 180° 회전</button>
+          <button type="button" id="foldBtn" class="btn btn-secondary" style="font-size: 0.9rem; padding: 10px;">🪞 반 접어 겹치기</button>
+          <button type="button" id="axisBtn" class="btn btn-secondary" style="font-size: 0.9rem; padding: 10px;">📏 대칭축 표시</button>
+        </div>
+        <div class="status-msg" id="modelStatus">⏳ AI 모델을 불러오는 중입니다...</div>
+      </div>
+
+      <!-- 오른쪽 카드: AI 판정 결과, 확률 막대, AI가 틀릴 수 있는 경우 안내 -->
+      <div class="card">
+        <div class="result-banner" id="resultBanner">
+          <div class="result-title" id="resultTitle">도형을 보여주세요!</div>
+          <div class="result-desc" id="resultDesc">AI가 선대칭인지 점대칭인지 분석해 줄게요.</div>
+        </div>
+
+        <div class="prob-list">
+          <div class="prob-item">
+            <div class="prob-label-row">
+              <span>🟦 선대칭도형 (line)</span>
+              <span id="prob-text-line">0%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" id="prob-bar-line" style="background: var(--line-color);"></div>
+            </div>
+          </div>
+
+          <div class="prob-item">
+            <div class="prob-label-row">
+              <span>🟩 점대칭도형 (point)</span>
+              <span id="prob-text-point">0%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" id="prob-bar-point" style="background: var(--point-color);"></div>
+            </div>
+          </div>
+
+          <div class="prob-item">
+            <div class="prob-label-row">
+              <span>🟪 선대칭 + 점대칭 모두 (both)</span>
+              <span id="prob-text-both">0%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" id="prob-bar-both" style="background: var(--both-color);"></div>
+            </div>
+          </div>
+
+          <div class="prob-item">
+            <div class="prob-label-row">
+              <span>⬜ 대칭이 아닌 도형 (none)</span>
+              <span id="prob-text-none">0%</span>
+            </div>
+            <div class="prob-bar-bg">
+              <div class="prob-bar-fill" id="prob-bar-none" style="background: var(--none-color);"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- [학생용 화면 필수 요소] 이 AI가 틀릴 수 있는 경우 안내 -->
+        <div class="caution-box">
+          <strong>💡 이 AI가 헷갈리거나 틀릴 수 있는 경우</strong>
+          <ul>
+            <li>도형이 화면 구석에 치우치거나 너무 작게 찍혔을 때</li>
+            <li>종이 위에 손 그림자가 진하게 지거나 조명이 어두울 때</li>
+            <li>자를 대지 않고 그려 선이 삐뚤어졌을 때 (180° 회전·반 접기 버튼으로 직접 확인해 보세요!)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 모델 입력 크기(224x224)에 맞춘 추론 전용 캔버스 -->
+  <canvas id="inferenceCanvas" width="224" height="224" style="display: none;"></canvas>
+
+  <script>
+    // 1. 같은 폴더(./)에 있는 티처블머신 모델 파일 경로와 확신도 기준값(0.7) 설정
+    const MODEL_URL = "./";
+    const CONFIDENCE_THRESHOLD = 0.7;
+
+    let model = null;
+    let webcam = null;
+    let isWebcamRunning = false;
+    let currentRotation = 0;
+
+    // 2. 5학년 학생들의 눈높이에 맞춘 클래스별 결과 안내 문구
+    const CLASS_INFO = {
+      line: {
+        title: "🟦 선대칭도형이에요!",
+        desc: "한 직선을 따라 반으로 접었을 때 완전히 겹쳐지는 도형이에요."
+      },
+      point: {
+        title: "🟩 점대칭도형이에요!",
+        desc: "한 점을 중심으로 180° 돌렸을 때 처음 도형과 완전히 겹쳐져요."
+      },
+      both: {
+        title: "🟪 선대칭이면서 점대칭도형이에요!",
+        desc: "반으로 접어도 겹쳐지고, 180° 돌려도 완전히 겹쳐지는 도형이에요."
+      },
+      none: {
+        title: "⬜ 대칭이 아닌 일반 도형이에요!",
+        desc: "접거나 180° 돌려도 겹쳐지지 않는 비대칭 도형이에요."
+      }
+    };
+
+    // 3. 페이지가 열릴 때 같은 폴더의 model.json과 metadata.json을 불러오는 함수
+    async function initModel() {
+      const statusEl = document.getElementById("modelStatus");
+      try {
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+        statusEl.textContent = "✅ AI 모델 준비 완료! 도형 사진을 올리거나 카메라를 켜보세요.";
+      } catch (error) {
+        console.error("모델 로드 오류:", error);
+        statusEl.textContent = "❌ 모델 로드 실패: 배포 주소(https) 접속 여부와 모델 파일 3개 위치를 확인해 주세요.";
+      }
+    }
+
+    // 4. 티처블머신 클래스 이름을 4개 표준 키(line, point, both, none)로 매칭하는 함수
+    function normalizeClassName(rawName) {
+      const lower = String(rawName).trim().toLowerCase();
+      if (lower.includes("line") || lower.includes("선")) return "line";
+      if (lower.includes("point") || lower.includes("점")) return "point";
+      if (lower.includes("both") || lower.includes("모두") || lower.includes("둘")) return "both";
+      if (lower.includes("none") || lower.includes("비대칭") || lower.includes("아님")) return "none";
+      return lower;
+    }
+
+    // 5. 입력된 이미지를 224x224 캔버스에 그려 확률을 계산하고 화면에 출력하는 함수
+    async function predictImage(sourceElement) {
+      if (!model) return;
+
+      const canvas = document.getElementById("inferenceCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sourceElement, 0, 0, canvas.width, canvas.height);
+
+      // 모델을 통해 각 클래스별 예측 확률 산출
+      const predictions = await model.predict(canvas);
+
+      const probs = { line: 0, point: 0, both: 0, none: 0 };
+      let maxProb = -1;
+      let bestKey = "none";
+
+      // 가장 높은 확률을 가진 클래스를 판정 결과로 선택
+      predictions.forEach(pred => {
+        const key = normalizeClassName(pred.className);
+        if (probs.hasOwnProperty(key)) {
+          probs[key] = pred.probability;
+        }
+        if (pred.probability > maxProb) {
+          maxProb = pred.probability;
+          bestKey = key;
+        }
+      });
+
+      // 클래스별 확률 막대 그래프 업데이트
+      ["line", "point", "both", "none"].forEach(key => {
+        const percent = Math.round((probs[key] || 0) * 100);
+        document.getElementById(`prob-text-${key}`).textContent = `${percent}%`;
+        document.getElementById(`prob-bar-${key}`).style.width = `${percent}%`;
+      });
+
+      const titleEl = document.getElementById("resultTitle");
+      const descEl = document.getElementById("resultDesc");
+      const bannerEl = document.getElementById("resultBanner");
+
+      // 최대 확률이 0.7 미만일 경우 '잘 모르겠어요' 안내 표시
+      if (maxProb < CONFIDENCE_THRESHOLD) {
+        titleEl.textContent = "🤔 잘 모르겠어요!";
+        descEl.textContent = `가장 높은 확률이 ${Math.round(maxProb * 100)}%로 확신이 낮아요. 도형을 화면 가운데에 크고 선명하게 보여주세요!`;
+        bannerEl.style.background = "#fef3c7";
+      } else {
+        const info = CLASS_INFO[bestKey] || CLASS_INFO.none;
+        titleEl.textContent = info.title;
+        descEl.textContent = `${info.desc} (확신도: ${Math.round(maxProb * 100)}%)`;
+        bannerEl.style.background = "#eef2ff";
+      }
+    }
+
+    // 6. 사진 파일 업로드 처리 (브라우저 내부에서만 읽고 외부로 전송하지 않음)
+    document.getElementById("fileInput").addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      stopWebcam();
+
+      currentRotation = 0;
+      const imgEl = document.getElementById("previewImage");
+      const mirrorEl = document.getElementById("foldMirrorImage");
+      imgEl.style.transform = "rotate(0deg)";
+      mirrorEl.style.display = "none";
+
+      document.getElementById("resultTitle").textContent = "🔍 분석 중...";
+      document.getElementById("resultDesc").textContent = "새로 올린 도형 사진을 살펴보고 있어요.";
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        imgEl.onload = function () {
+          document.getElementById("placeholderText").style.display = "none";
+          imgEl.style.display = "block";
+          mirrorEl.src = e.target.result;
+          predictImage(imgEl);
+        };
+        imgEl.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      event.target.value = "";
+    });
+
+    // 7. 카메라 켜기/끄기 기능 (아이폰/아이패드 멈춤 방지를 위한 playsinline 포함)
+    document.getElementById("webcamBtn").addEventListener("click", async function () {
+      if (isWebcamRunning) {
+        stopWebcam();
+        return;
+      }
+
+      try {
+        webcam = new tmImage.Webcam(360, 360, false);
+        await webcam.setup({ facingMode: "environment" });
+        // iOS Safari 환경에서 비디오가 멈추지 않도록 playsinline 설정 추가
+        if (webcam.webcam) {
+          webcam.webcam.setAttribute("playsinline", true);
+          webcam.webcam.setAttribute("muted", true);
+        }
+        await webcam.play();
+        isWebcamRunning = true;
+
+        document.getElementById("webcamBtn").textContent = "⏹️ 카메라 끄기";
+        document.getElementById("placeholderText").style.display = "none";
+        document.getElementById("previewImage").style.display = "none";
+        document.getElementById("foldMirrorImage").style.display = "none";
+
+        const container = document.getElementById("webcam-container");
+        container.innerHTML = "";
+        container.appendChild(webcam.canvas);
+        container.style.display = "block";
+
+        window.requestAnimationFrame(webcamLoop);
+      } catch (err) {
+        alert("카메라 권한을 허용해 주시거나 https 배포 주소에서 접속해 주세요.");
+      }
+    });
+
+    // 8. 웹캠 프레임을 반복해서 예측하는 루프 함수
+    async function webcamLoop() {
+      if (!isWebcamRunning) return;
+      webcam.update();
+      await predictImage(webcam.canvas);
+      window.requestAnimationFrame(webcamLoop);
+    }
+
+    function stopWebcam() {
+      if (webcam && isWebcamRunning) {
+        webcam.stop();
+      }
+      isWebcamRunning = false;
+      document.getElementById("webcamBtn").textContent = "📷 카메라 켜기";
+      document.getElementById("webcam-container").style.display = "none";
+    }
+
+    // 9. 점대칭 확인을 위한 180도 회전 버튼
+    document.getElementById("rotateBtn").addEventListener("click", function () {
+      currentRotation = currentRotation === 0 ? 180 : 0;
+      document.getElementById("previewImage").style.transform = `rotate(${currentRotation}deg)`;
+    });
+
+    // 10. 선대칭 확인을 위한 반 접어 겹치기 버튼
+    document.getElementById("foldBtn").addEventListener("click", function () {
+      const mirrorEl = document.getElementById("foldMirrorImage");
+      if (!mirrorEl.src) return;
+      mirrorEl.style.display = mirrorEl.style.display === "block" ? "none" : "block";
+    });
+
+    // 11. 대칭축 및 대칭의 중심 보조선 표시 버튼
+    document.getElementById("axisBtn").addEventListener("click", function () {
+      const overlay = document.getElementById("axisOverlay");
+      overlay.style.display = overlay.style.display === "block" ? "none" : "block";
+    });
+
+    window.addEventListener("DOMContentLoaded", initModel);
+  </script>
+</body>
+</html>

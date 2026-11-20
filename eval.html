@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>교사용 AI 모델 고정 평가 도구 (eval.html)</title>
+  <!-- [필수 규정] 티처블머신 호환을 위해 tfjs 1.3.1 및 tmImage 0.8 버전 고정 유지 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+    }
+
+    body {
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 28px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+      color: #1e293b;
+    }
+
+    .sub-info {
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    .nav-link {
+      color: #2563eb;
+      font-weight: 700;
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .control-panel {
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 24px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+
+    .btn:hover { background: #1d4ed8; }
+    .btn.secondary { background: #64748b; }
+    .btn.csv { background: #059669; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: #ffffff;
+      padding: 18px;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      text-align: center;
+      border: 1px solid #e2e8f0;
+    }
+
+    .stat-card.highlight {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .stat-value {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: #1e3a8a;
+    }
+
+    .stat-sub {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .section-card {
+      background: #ffffff;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      margin-bottom: 16px;
+      color: #1e293b;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: center;
+    }
+
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 12px;
+      font-size: 0.95rem;
+    }
+
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+    }
+
+    .diag-cell {
+      background: #dcfce7;
+      font-weight: 800;
+      color: #166534;
+    }
+
+    .err-cell {
+      background: #fee2e2;
+      color: #991b1b;
+      font-weight: 700;
+    }
+
+    .wrong-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
+    }
+
+    .wrong-card {
+      border: 2px solid #fca5a5;
+      background: #fff5f5;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .wrong-card img {
+      width: 100%;
+      height: 130px;
+      object-fit: contain;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 8px;
+    }
+
+    .wrong-info {
+      font-size: 0.88rem;
+      color: #7f1d1d;
+      line-height: 1.4;
+    }
+
+    .badge-ok {
+      background: #dcfce7;
+      color: #166534;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .badge-fail {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+
+    .thumb-img {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+      background: #f8fafc;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>📊 교사용 AI 모델 고정 평가 화면 (eval.html)</h1>
+        <p class="sub-info">
+          파일명 규칙: <code>클래스_번호.jpg</code> (예: <code>line_01.jpg</code>, <code>point_01.jpg</code>, <code>both_01.jpg</code>, <code>none_01.jpg</code>)<br>
+          🔒 선택한 사진은 외부로 전송되지 않으며 브라우저 안에서만 채점됩니다.
+        </p>
+      </div>
+      <a href="./index.html" class="nav-link">👈 학생용 화면(index.html)으로 이동</a>
+    </header>
+
+    <!-- 1. 테스트 사진 넣기 및 CSV 내려받기 버튼 -->
+    <div class="control-panel">
+      <label for="evalFilesInput" class="btn">📂 1. 평가용 사진 한꺼번에 선택</label>
+      <input type="file" id="evalFilesInput" accept="image/*" multiple style="display: none;">
+      <button type="button" class="btn secondary" id="resetBtn">🔄 초기화</button>
+      <button type="button" class="btn csv" id="csvBtn" disabled>📥 결과 CSV 내려받기</button>
+      <span id="statusText" style="font-weight: 600; color: #334155;">⏳ 모델을 준비 중입니다...</span>
+    </div>
+
+    <!-- 2. 전체 정확도 및 클래스별 정분류율 카드 -->
+    <div class="summary-cards">
+      <div class="stat-card highlight">
+        <div class="stat-label">전체 정확도 (Accuracy)</div>
+        <div class="stat-value" id="accuracyValue">0.0%</div>
+        <div class="stat-sub" id="totalSummary">0 / 0장</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">line (선대칭) 정분류율</div>
+        <div class="stat-value" id="rate-line">-</div>
+        <div class="stat-sub" id="count-line">0 / 0장</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">point (점대칭) 정분류율</div>
+        <div class="stat-value" id="rate-point">-</div>
+        <div class="stat-sub" id="count-point">0 / 0장</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">both (모두 대칭) 정분류율</div>
+        <div class="stat-value" id="rate-both">-</div>
+        <div class="stat-sub" id="count-both">0 / 0장</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">none (비대칭) 정분류율</div>
+        <div class="stat-value" id="rate-none">-</div>
+        <div class="stat-sub" id="count-none">0 / 0장</div>
+      </div>
+    </div>
+
+    <!-- 3. 혼동행렬 표 -->
+    <div class="section-card">
+      <h2>2. 혼동행렬 (Confusion Matrix: 행 = 실제 정답, 열 = AI 예측)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>실제 정답 \ AI 예측</th>
+            <th>line (선대칭)</th>
+            <th>point (점대칭)</th>
+            <th>both (모두 대칭)</th>
+            <th>none (비대칭)</th>
+            <th>클래스별 정분류율</th>
+          </tr>
+        </thead>
+        <tbody id="matrixBody">
+          <tr><td colspan="6">평가용 사진을 선택하면 혼동행렬이 자동으로 계산됩니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 4. 틀린 사진(오답 사진) 모아 보기 -->
+    <div class="section-card">
+      <h2>3. 틀린 사진 모음 (오분류 사례 확인)</h2>
+      <p id="wrongSummaryText" style="color: #64748b; margin-bottom: 12px; font-size: 0.95rem;">
+        오분류된 사진이 여기에 따로 표시됩니다.
+      </p>
+      <div class="wrong-grid" id="wrongGrid"></div>
+    </div>
+
+    <!-- 5. 개별 사진 전체 상세 로그 -->
+    <div class="section-card">
+      <h2>4. 전체 평가 사진 판정 상세 기록</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>번호</th>
+            <th>미리보기</th>
+            <th>파일명</th>
+            <th>실제 정답</th>
+            <th>AI 예측 결과</th>
+            <th>최대 확률</th>
+            <th>정오 판정</th>
+          </tr>
+        </thead>
+        <tbody id="logBody">
+          <tr><td colspan="7">아직 평가된 데이터가 없습니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <canvas id="evalCanvas" width="224" height="224" style="display: none;"></canvas>
+
+  <script>
+    // 1. 같은 폴더의 모델 경로와 4개 클래스 이름 정의
+    const MODEL_URL = "./";
+    const CLASSES = ["line", "point", "both", "none"];
+    let model = null;
+    let csvRecords = []; // CSV 내려받기를 위한 결과 저장 배열
+
+    // 2. 페이지 시작 시 티처블머신 모델 불러오기
+    async function initEvalModel() {
+      const statusEl = document.getElementById("statusText");
+      try {
+        model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+        statusEl.textContent = "✅ 모델 준비 완료! [평가용 사진 한꺼번에 선택] 버튼을 눌러 채점을 시작하세요.";
+      } catch (err) {
+        console.error("모델 로드 오류:", err);
+        statusEl.textContent = "❌ 모델 로드 실패: 배포 주소(https) 접속 여부와 모델 파일 3개 위치를 확인해 주세요.";
+      }
+    }
+
+    // 3. 모델 내부 클래스 이름을 표준 클래스명(line, point, both, none)으로 변환하는 함수
+    function normalizeLabel(name) {
+      const lower = String(name).trim().toLowerCase();
+      if (lower.includes("line") || lower.includes("선")) return "line";
+      if (lower.includes("point") || lower.includes("점")) return "point";
+      if (lower.includes("both") || lower.includes("모두") || lower.includes("둘")) return "both";
+      if (lower.includes("none") || lower.includes("비대칭") || lower.includes("아님")) return "none";
+      return null;
+    }
+
+    // 4. [7주차 필수 코드 이해] 파일 이름에서 밑줄(_) 앞부분을 읽어 실제 정답 클래스를 추출하는 함수
+    function extractActualClass(filename) {
+      const prefix = filename.split("_")[0].trim().toLowerCase();
+      return normalizeLabel(prefix);
+    }
+
+    // 5. 여러 장의 사진을 한 장씩 예측하고 혼동행렬과 오답 모음을 만드는 핵심 함수
+    document.getElementById("evalFilesInput").addEventListener("change", async function (event) {
+      if (!model) {
+        alert("모델이 아직 준비되지 않았습니다. 배포 주소로 접속했는지 확인해 주세요.");
+        return;
+      }
+
+      const files = Array.from(event.target.files);
+      if (files.length === 0) return;
+
+      // 파일명 순서대로 정렬
+      files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+      // 4x4 혼동행렬 0으로 초기화
+      const matrix = {
+        line: { line: 0, point: 0, both: 0, none: 0 },
+        point: { line: 0, point: 0, both: 0, none: 0 },
+        both: { line: 0, point: 0, both: 0, none: 0 },
+        none: { line: 0, point: 0, both: 0, none: 0 }
+      };
+
+      const logBody = document.getElementById("logBody");
+      const wrongGrid = document.getElementById("wrongGrid");
+      logBody.innerHTML = "";
+      wrongGrid.innerHTML = "";
+      csvRecords = [];
+
+      let totalValid = 0;
+      let totalCorrect = 0;
+      let wrongCount = 0;
+
+      const statusEl = document.getElementById("statusText");
+      const canvas = document.getElementById("evalCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // 사진을 한 장씩 순서대로 예측 (7주차 슬라이드 21번 구조 반영)
+      for (const file of files) {
+        // 파일명 밑줄(_) 앞부분에서 실제 클래스 읽기 (예: line_01.jpg -> line)
+        const actual = extractActualClass(file.name);
+        if (!actual) continue;
+
+        const dataUrl = await readFileAsDataURL(file);
+        const img = await loadImage(dataUrl);
+
+        ctx.clearRect(0, 0, 224, 224);
+        ctx.drawImage(img, 0, 0, 224, 224);
+
+        const result = await model.predict(canvas);
+
+        // 확률이 가장 높은 클래스를 최종 판정(pred)으로 선택
+        const bestObj = result.reduce((a, b) => (a.probability > b.probability ? a : b));
+        const pred = normalizeLabel(bestObj.className) || "none";
+        const maxProb = bestObj.probability;
+
+        // 혼동행렬 칸을 1 증가시킴
+        matrix[actual][pred] += 1;
+        totalValid++;
+
+        const isCorrect = (actual === pred);
+        if (isCorrect) {
+          totalCorrect++;
+        } else {
+          wrongCount++;
+          // 틀린 사진 모음에 카드 추가
+          const wrongCard = document.createElement("div");
+          wrongCard.className = "wrong-card";
+          wrongCard.innerHTML = `
+            <img src="${dataUrl}" alt="${file.name}">
+            <div class="wrong-info">
+              <div><strong>${file.name}</strong></div>
+              <div>실제: ${actual} → 예측: <strong>${pred}</strong></div>
+              <div>확률: ${maxProb.toFixed(2)} (${(maxProb * 100).toFixed(1)}%)</div>
+            </div>
+          `;
+          wrongGrid.appendChild(wrongCard);
+        }
+
+        // 클래스별 세부 확률 저장 (CSV용)
+        const probMap = { line: 0, point: 0, both: 0, none: 0 };
+        result.forEach(r => {
+          const k = normalizeLabel(r.className);
+          if (k) probMap[k] = r.probability;
+        });
+
+        csvRecords.push({
+          fileName: file.name,
+          actual: actual,
+          pred: pred,
+          correct: isCorrect ? "O" : "X",
+          maxProb: maxProb,
+          probMap: probMap
+        });
+
+        // 상세 로그 표에 행 추가
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${totalValid}</td>
+          <td><img src="${dataUrl}" class="thumb-img" alt="${file.name}"></td>
+          <td><strong>${file.name}</strong></td>
+          <td>${actual}</td>
+          <td>${pred}</td>
+          <td>${(maxProb * 100).toFixed(1)}%</td>
+          <td><span class="${isCorrect ? 'badge-ok' : 'badge-fail'}">${isCorrect ? '정답 (O)' : '오답 (X)'}</span></td>
+        `;
+        logBody.appendChild(tr);
+
+        statusEl.textContent = `🔍 채점 진행 중... (${totalValid}장 처리 완료)`;
+      }
+
+      // 전체 정확도 및 클래스별 정분류율 업데이트
+      const acc = totalValid > 0 ? ((totalCorrect / totalValid) * 100).toFixed(1) : "0.0";
+      document.getElementById("accuracyValue").textContent = `${acc}%`;
+      document.getElementById("totalSummary").textContent = `${totalCorrect} / ${totalValid}장`;
+
+      CLASSES.forEach(c => {
+        const rowSum = CLASSES.reduce((sum, p) => sum + matrix[c][p], 0);
+        const correctCnt = matrix[c][c];
+        const rateTxt = rowSum > 0 ? ((correctCnt / rowSum) * 100).toFixed(1) + "%" : "-";
+        document.getElementById(`rate-${c}`).textContent = rateTxt;
+        document.getElementById(`count-${c}`).textContent = `${correctCnt} / ${rowSum}장`;
+      });
+
+      // 혼동행렬 표 및 오답 요약 업데이트
+      renderConfusionMatrix(matrix);
+      const wrongSummaryEl = document.getElementById("wrongSummaryText");
+      wrongSummaryEl.textContent = wrongCount > 0
+        ? `총 ${totalValid}장 중 틀린 사진 ${wrongCount}장이 발견되었습니다.`
+        : `🎉 모든 사진(${totalValid}장)을 정확히 맞혔습니다!`;
+
+      document.getElementById("csvBtn").disabled = csvRecords.length === 0;
+      statusEl.textContent = `✅ 총 ${totalValid}장 평가 완료! (전체 정확도: ${acc}%)`;
+      event.target.value = "";
+    });
+
+    // 6. 혼동행렬 표를 화면에 그리는 함수 (대각선 합 ÷ 그 줄 합 = 클래스별 정분류율)
+    function renderConfusionMatrix(matrix) {
+      const tbody = document.getElementById("matrixBody");
+      tbody.innerHTML = "";
+
+      CLASSES.forEach(actual => {
+        const row = matrix[actual];
+        const rowSum = CLASSES.reduce((sum, pred) => sum + row[pred], 0);
+        const recall = rowSum > 0 ? ((row[actual] / rowSum) * 100).toFixed(1) + "%" : "-";
+
+        const tr = document.createElement("tr");
+        let cellsHtml = `<th>${actual} (실제)</th>`;
+
+        CLASSES.forEach(pred => {
+          const val = row[pred];
+          const cls = (actual === pred) ? "diag-cell" : (val > 0 ? "err-cell" : "");
+          cellsHtml += `<td class="${cls}">${val}</td>`;
+        });
+
+        cellsHtml += `<td><strong>${recall}</strong> (${row[actual]}/${rowSum})</td>`;
+        tr.innerHTML = cellsHtml;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 7. 평가 결과를 CSV 파일로 내려받는 함수 (엑셀 한글 깨짐 방지 BOM 포함)
+    document.getElementById("csvBtn").addEventListener("click", function () {
+      if (csvRecords.length === 0) return;
+
+      let csv = "\uFEFF파일명,실제클래스,예측클래스,정오판정,최대확률,prob_line,prob_point,prob_both,prob_none\n";
+      csvRecords.forEach(r => {
+        csv += `"${r.fileName}",${r.actual},${r.pred},${r.correct},${r.maxProb.toFixed(4)},${r.probMap.line.toFixed(4)},${r.probMap.point.toFixed(4)},${r.probMap.both.toFixed(4)},${r.probMap.none.toFixed(4)}\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "eval_results.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // 8. 초기화 버튼 기능
+    document.getElementById("resetBtn").addEventListener("click", function () {
+      csvRecords = [];
+      document.getElementById("accuracyValue").textContent = "0.0%";
+      document.getElementById("totalSummary").textContent = "0 / 0장";
+      CLASSES.forEach(c => {
+        document.getElementById(`rate-${c}`).textContent = "-";
+        document.getElementById(`count-${c}`).textContent = "0 / 0장";
+      });
+      document.getElementById("matrixBody").innerHTML = `<tr><td colspan="6">평가용 사진을 선택하면 혼동행렬이 자동으로 계산됩니다.</td></tr>`;
+      document.getElementById("wrongGrid").innerHTML = "";
+      document.getElementById("wrongSummaryText").textContent = "오분류된 사진이 여기에 따로 표시됩니다.";
+      document.getElementById("logBody").innerHTML = `<tr><td colspan="7">아직 평가된 데이터가 없습니다.</td></tr>`;
+      document.getElementById("csvBtn").disabled = true;
+      document.getElementById("statusText").textContent = "✅ 초기화 완료. 다시 사진을 선택해 주세요.";
+    });
+
+    function readFileAsDataURL(file) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = src;
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", initEvalModel);
+  </script>
+</body>
+</html>
